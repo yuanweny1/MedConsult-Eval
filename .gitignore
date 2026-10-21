@@ -1,0 +1,10 @@
+# 密钥和本地配置，绝不上传
+.env
+
+# Python 虚拟环境（可随时重建，不上传）
+.venv/
+
+# Python 运行时产生的临时文件
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

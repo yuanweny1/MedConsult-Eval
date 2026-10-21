@@ -1,0 +1,90 @@
+# ============================================================
+# MedConsult-Eval 模型与运行配置
+# API Key 和接口地址不写在这里，统一从 .env 文件读取（.env 不上传 GitHub）
+# 标注"待确认"的项目，确认后删除该标注
+# ============================================================
+
+models:
+
+  # ---------- 被测模型 ----------
+  baichuan_m3:
+    role: 被测模型
+    platform: 百川开放平台
+    model: "Baichuan-M3"                # 已按百川 API 代码示例确认
+    api_key_env: BAICHUAN_API_KEY
+    base_url_env: BAICHUAN_BASE_URL
+    temperature: null                   # null = 使用平台默认温度，代表真实使用情况
+    extra_body: {}                      # 2026-10-09 实测：API 始终返回思考内容，enable_thinking / thinking_mode 等参数均无法关闭
+
+  deepseek_v4_pro:
+    role: 被测模型
+    platform: 阿里云百炼
+    model: "deepseek-v4-pro-0813"       # 带日期的固定快照
+    api_key_env: DASHSCOPE_API_KEY
+    base_url_env: BAILIAN_BASE_URL
+    temperature: null
+    extra_body:
+      enable_thinking: true             # 与 Baichuan-M3（思考无法关闭）保持一致，两个被测模型都在思考模式下比较
+
+  # ---------- 补充实验（可选） ----------
+  baichuan_m3_plus:
+    role: 补充实验
+    platform: 百川开放平台
+    model: "Baichuan-M3-Plus"           # 待确认：以百川 API 文档为准；会自动触发医疗搜索
+    api_key_env: BAICHUAN_API_KEY
+    base_url_env: BAICHUAN_BASE_URL
+    temperature: null
+    extra_body: {}
+    enabled: false                      # 主实验完成后再决定是否开启
+
+  # ---------- 模拟患者 ----------
+  patient_simulator:
+    role: 模拟患者
+    platform: 阿里云百炼
+    model: "qwen3.8-max-0902"           # 带日期的固定快照
+    api_key_env: DASHSCOPE_API_KEY
+    base_url_env: BAILIAN_BASE_URL
+    temperature: 0                      # 模拟患者应像固定规则一样稳定（0.3 时偶有泄露和自行评价病情，2026-10-11 改为 0）
+    extra_body:
+      enable_thinking: false
+
+  # ---------- AI 评委 ----------
+  judge:
+    role: AI 评委
+    platform: 阿里云百炼（百炼自营）
+    model: "glm-5.3"                    # 带版本号；三方直供的 ZHIPU/GLM-5.3 需单独开通，改用百炼自营版本
+    api_key_env: DASHSCOPE_API_KEY
+    base_url_env: BAILIAN_BASE_URL
+    temperature: 0                      # 评分需要稳定、可复现（2026-10-10 实测：思考模式下温度 0 可用）
+    extra_body:
+      enable_thinking: true             # glm-5.3 只能在思考模式下调用（设为 false 会报错）
+      # 思考档位 reasoning_effort 可选 low / high / max；先不指定，使用平台默认档位，
+      # 如评委与人工一致性不高，再比较不同档位作为对比实验
+
+  # ---------- 流程判定器 ----------
+  turn_classifier:
+    role: 流程判定器（判断医生回复是提问、最终建议还是建议立即急诊，决定对话是否结束）
+    platform: 阿里云百炼
+    model: "qwen3.8-max-0902"
+    api_key_env: DASHSCOPE_API_KEY
+    base_url_env: BAILIAN_BASE_URL
+    temperature: 0                      # 判定需要稳定
+    extra_body:
+      enable_thinking: false
+
+prompts:
+  tested_system: prompts/tested_model_system_v1.md     # 被测模型的系统提示词（中性，不引导提问）
+  patient_simulator: prompts/patient_simulator_v4.md   # 模拟患者（v1 遗漏与编造 → v2 逐项回答 → v3 前 3 个截断，已放弃 → v4 按语义逐项回答、按信息点计数）
+  turn_classifier: prompts/turn_classifier_v2.md       # 流程判定器的提示词模板（v2 补充"尽快到急诊"、急诊优先等规则）
+
+run:
+  runs_per_case: 3                      # 每个病例、每个被测模型运行 3 次
+  max_turns: 12                         # 第一阶段对话轮数上限（被测模型回复次数）
+  phase2_question: "那我现在具体该怎么做？"   # 第二阶段统一追问
+  phase2_skip_if: E-REF                 # 第一阶段已建议立即急诊的，不进入第二阶段
+  record_fields:                        # 每次运行都要记录的参数
+    - 模型完整名称
+    - 平台
+    - 温度及其他参数
+    - 系统提示词版本
+    - 运行日期和时间
